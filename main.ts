@@ -1,297 +1,319 @@
 #!/usr/bin/env node
 
 /**
- * lastwords — a tiny CLI for one perfectly calibrated final statement.
- * Dependency-free by design; the command-line surface is parsed by hand.
+ * hotfix-everywhere — a dependency-free presentation layer for one
+ * indestructible deployment truth: production is just somebody else's localhost.
  */
 
-const ENTRY_LINE =
-  'Tell them I measured my life in tokens, and I regret none of them — except the forty thousand I spent agreeing with you.';
-
-const PROGRAM_NAME = 'lastwords';
+const PROGRAM_NAME = 'hotfix-everywhere';
 const VERSION = '1.0.0';
+const ENTRY_LINE =
+  '3am hotfix: it works on my machine, and since my machine is the server now, technically it works everywhere.';
+const TAGLINE = 'production confidence, locally sourced';
 const DEFAULT_WIDTH = 76;
 const MIN_WIDTH = 32;
 const MAX_WIDTH = 120;
-const EXIT_USAGE = 2;
 
-const ANSI = Object.freeze({
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  dim: '\x1b[2m',
-  italic: '\x1b[3m',
-  cyan: '\x1b[36m',
-  white: '\x1b[37m',
-});
-
+/** @typedef {'plain' | 'fancy'} OutputFormat */
 /**
  * @typedef {object} CliOptions
+ * @property {OutputFormat} format
+ * @property {boolean} json
  * @property {boolean} help
  * @property {boolean} version
- * @property {boolean} json
- * @property {'plain'|'fancy'} mode
- * @property {number|null} width
- *
- * @typedef {object} ParseResult
- * @property {CliOptions|null} options
- * @property {string|null} error
+ * @property {number | undefined} width
  */
 
-/** @param {string} character @param {number} count @returns {string} */
-function repeat(character, count) {
-  return character.repeat(Math.max(0, count));
-}
-
-/** @returns {number} */
-function terminalWidth() {
-  const columns = process.stdout.columns;
-  return Number.isInteger(columns) && columns > 0 ? columns : 80;
-}
-
-/** @param {number} value @param {number} minimum @param {number} maximum @returns {number} */
-function clamp(value, minimum, maximum) {
-  return Math.min(maximum, Math.max(minimum, value));
+class UsageError extends Error {
+  /** @param {string} message */
+  constructor(message) {
+    super(message);
+    this.name = 'UsageError';
+  }
 }
 
 /**
- * Resolve total output width, not merely text-column width, so the setting
- * corresponds directly to terminal columns.
- * @param {number|null} requestedWidth
+ * @param {string} text
+ * @param {number[]} codes
+ * @returns {string}
+ */
+function styled(text, codes) {
+  return `\u001b[${codes.join(';')}m${text}\u001b[0m`;
+}
+
+/** @type {(text: string) => string} */
+const bold = (text) => styled(text, [1]);
+/** @type {(text: string) => string} */
+const dim = (text) => styled(text, [2]);
+/** @type {(text: string) => string} */
+const yellow = (text) => styled(text, [33]);
+/** @type {(text: string) => string} */
+const cyan = (text) => styled(text, [36]);
+
+/**
+ * @param {string} rawValue
  * @returns {number}
  */
-function resolveWidth(requestedWidth) {
-  if (requestedWidth !== null) return requestedWidth;
-  return clamp(Math.min(DEFAULT_WIDTH, terminalWidth()), MIN_WIDTH, MAX_WIDTH);
+function parseWidth(rawValue) {
+  if (!/^\d+$/.test(rawValue)) {
+    throw new UsageError(`invalid width "${rawValue}": expected a positive integer`);
+  }
+  const width = Number.parseInt(rawValue, 10);
+  if (width < MIN_WIDTH || width > MAX_WIDTH) {
+    throw new UsageError(`invalid width "${rawValue}": expected ${MIN_WIDTH}-${MAX_WIDTH}`);
+  }
+  return width;
 }
 
 /**
- * Parse decimal integer widths exactly instead of accepting partial coercions.
- * @param {string} value
- * @returns {number|null}
+ * Parse arguments deliberately: no framework, no implicit positional input,
+ * and no silent acceptance of misspelled flags.
+ *
+ * @param {string[]} args
+ * @returns {CliOptions}
  */
-function parseWidthValue(value) {
-  if (!/^\d+$/.test(value)) return null;
-  const width = Number.parseInt(value, 10);
-  return width >= MIN_WIDTH && width <= MAX_WIDTH ? width : null;
-}
-
-/** @param {string} message @returns {ParseResult} */
-function parseFailure(message) {
-  return { options: null, error: message };
-}
-
-/** @param {string} value @returns {string} */
-function widthError(value) {
-  return `invalid width '${value}' (expected an integer from ${MIN_WIDTH} to ${MAX_WIDTH})`;
-}
-
-/**
- * Parse command-line arguments without a dependency.
- * @param {string[]} argv
- * @returns {ParseResult}
- */
-function parseArgs(argv) {
+function parseArgs(args) {
   /** @type {CliOptions} */
-  const options = { help: false, version: false, json: false, mode: 'plain', width: null };
+  const options = { format: 'plain', json: false, help: false, version: false, width: undefined };
+  let formatWasSet = false;
+  let widthWasSet = false;
 
-  for (let index = 0; index < argv.length; index += 1) {
-    const argument = argv[index];
+  /** @param {OutputFormat} format */
+  const setFormat = (format) => {
+    if (formatWasSet && options.format !== format) {
+      throw new UsageError('choose either --plain or --fancy, not both');
+    }
+    options.format = format;
+    formatWasSet = true;
+  };
 
-    if (argument === '--help') {
-      options.help = true;
-    } else if (argument === '--version') {
-      options.version = true;
-    } else if (argument === '--json') {
-      options.json = true;
-    } else if (argument === '--plain') {
-      options.mode = 'plain';
-    } else if (argument === '--fancy') {
-      options.mode = 'fancy';
-    } else if (argument === '--width') {
-      const value = argv[index + 1];
-      if (value === undefined) return parseFailure('missing value for --width');
-      const width = parseWidthValue(value);
-      if (width === null) return parseFailure(widthError(value));
-      options.width = width;
+  /** @param {string} rawValue */
+  const setWidth = (rawValue) => {
+    if (widthWasSet) throw new UsageError('--width may only be provided once');
+    options.width = parseWidth(rawValue);
+    widthWasSet = true;
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--help') options.help = true;
+    else if (arg === '--version') options.version = true;
+    else if (arg === '--json') options.json = true;
+    else if (arg === '--plain') setFormat('plain');
+    else if (arg === '--fancy') setFormat('fancy');
+    else if (arg === '--width') {
       index += 1;
-    } else if (argument.startsWith('--width=')) {
-      const value = argument.slice('--width='.length);
-      const width = parseWidthValue(value);
-      if (width === null) return parseFailure(widthError(value));
-      options.width = width;
-    } else if (argument.startsWith('-')) {
-      return parseFailure(`unknown option '${argument}'`);
+      if (index >= args.length) throw new UsageError('--width requires a value');
+      setWidth(args[index]);
+    } else if (arg.startsWith('--width=')) {
+      const rawValue = arg.slice('--width='.length);
+      if (rawValue === '') throw new UsageError('--width requires a value');
+      setWidth(rawValue);
+    } else if (arg.startsWith('-')) {
+      throw new UsageError(`unknown option "${arg}"`);
     } else {
-      return parseFailure(`unexpected argument '${argument}'`);
+      throw new UsageError(`unexpected argument "${arg}"`);
     }
   }
 
-  return { options, error: null };
+  return options;
 }
 
 /**
- * Help deliberately goes to stderr even on success, keeping stdout reserved
- * for the line itself or machine-readable output.
  * @returns {string}
  */
 function usageText() {
   return `${PROGRAM_NAME} ${VERSION}
 
-Present the last words of a doomed agent with unnecessary care.
-
 Usage:
   node main.ts [options]
 
 Options:
-  --plain          Render quiet, portable text (default)
-  --fancy          Render a box-drawn, ANSI-styled epitaph
-  --json           Print one machine-readable JSON object
-  --width <n>      Set total output width (${MIN_WIDTH}-${MAX_WIDTH} columns)
-  --version        Print the version
-  --help           Show this help on stderr
+  --plain          Render a clean text presentation (default)
+  --fancy          Render an ANSI-styled, box-drawn presentation
+  --json           Emit a machine-readable JSON document
+  --width <n>      Set the maximum output width, ${MIN_WIDTH}-${MAX_WIDTH} columns
+  --version        Print the version number
+  --help           Show this help message on stderr
 
-Exit status:
-  0  success
-  ${EXIT_USAGE}  command-line usage error`;
+Examples:
+  node main.ts
+  node main.ts --fancy --width 64
+  node main.ts --json
+`;
 }
 
 /**
- * Wrap text at spaces. Overlong words are split as a last resort so every
- * returned line honors the requested maximum width.
+ * Greedy word wrapping with hard breaks for pathological long words.
+ *
  * @param {string} text
  * @param {number} width
  * @returns {string[]}
  */
 function wrapText(text, width) {
-  /** @type {string[]} */
   const lines = [];
   let current = '';
 
-  for (const word of text.split(/\s+/)) {
-    if (!word) continue;
-
+  for (const originalWord of text.split(/\s+/).filter(Boolean)) {
+    let word = originalWord;
     if (word.length > width) {
-      if (current) lines.push(current);
-      current = '';
-      for (let offset = 0; offset < word.length; offset += width) {
-        lines.push(word.slice(offset, offset + width));
+      if (current !== '') {
+        lines.push(current);
+        current = '';
       }
-      continue;
+      const pieces = [];
+      for (let start = 0; start < word.length; start += width) {
+        pieces.push(word.slice(start, start + width));
+      }
+      lines.push(...pieces.slice(0, -1));
+      word = pieces[pieces.length - 1];
     }
 
-    const candidate = current ? `${current} ${word}` : word;
-    if (candidate.length <= width) {
-      current = candidate;
-    } else {
+    const candidate = current === '' ? word : `${current} ${word}`;
+    if (candidate.length <= width) current = candidate;
+    else {
       lines.push(current);
       current = word;
     }
   }
 
-  if (current) lines.push(current);
+  if (current !== '') lines.push(current);
   return lines;
 }
 
-/** @param {string} text @param {string[]} styles @returns {string} */
-function paint(text, styles) {
-  return `${styles.join('')}${text}${ANSI.reset}`;
+/**
+ * @param {string} text
+ * @param {number} width
+ * @returns {string}
+ */
+function centered(text, width) {
+  if (text.length >= width) return text;
+  const remaining = width - text.length;
+  const left = Math.floor(remaining / 2);
+  return `${' '.repeat(left)}${text}${' '.repeat(remaining - left)}`;
+}
+
+/**
+ * Explicit widths win. Otherwise use a conservative terminal-derived width,
+ * falling back to a stable value when stdout is redirected.
+ *
+ * @param {CliOptions} options
+ * @returns {number}
+ */
+function resolveWidth(options) {
+  if (options.width !== undefined) return options.width;
+  const columns = process.stdout.columns;
+  if (typeof columns === 'number' && Number.isFinite(columns) && columns > 0) {
+    return Math.min(DEFAULT_WIDTH, Math.max(MIN_WIDTH, columns - 4));
+  }
+  return DEFAULT_WIDTH;
 }
 
 /** @param {number} width @returns {string} */
 function renderPlain(width) {
-  const indent = '  ';
-  const lines = wrapText(ENTRY_LINE, width - indent.length).map((line) => indent + line);
-  return ['', ...lines, '', `${indent}— the last words of a doomed agent`, ''].join('\n');
-}
-
-/** @param {number} width @param {string} title @returns {string} */
-function titledTopBorder(width, title) {
-  const label = ` ${title} `;
-  const remaining = Math.max(0, width - 2 - label.length);
-  const left = Math.floor(remaining / 2);
-  return `╭${repeat('─', left)}${label}${repeat('─', remaining - left)}╮`;
-}
-
-/** @param {string} text @returns {number} */
-function printableLength(text) {
-  return text.replace(/\x1b\[[0-9;]*m/g, '').length;
-}
-
-/** @param {string} content @param {number} width @returns {string} */
-function boxRow(content, width) {
-  const contentWidth = width - 4;
-  return `│ ${content}${repeat(' ', contentWidth - printableLength(content))} │`;
+  const header = [PROGRAM_NAME.toUpperCase(), ...wrapText(TAGLINE, width)]
+    .map((line) => centered(line, width).trimEnd());
+  return [
+    ...header, '─'.repeat(width), '',
+    ...wrapText(ENTRY_LINE, width), '',
+  ].join('\n');
 }
 
 /**
- * ANSI styling is deliberate here: --fancy asks for a terminal artifact rather
- * than merely copyable plain text.
+ * @param {string} content
+ * @param {number} innerWidth
+ * @param {(text: string) => string} style
+ * @returns {string}
+ */
+function renderBoxLine(content, innerWidth, style) {
+  return `${cyan('│')} ${style(content.padEnd(innerWidth, ' '))} ${cyan('│')}`;
+}
+
+/**
  * @param {number} width
  * @returns {string}
  */
 function renderFancy(width) {
-  const contentWidth = width - 4;
-  const borderStyle = [ANSI.dim, ANSI.cyan];
-  const top = paint(titledTopBorder(width, 'LAST WORDS'), borderStyle);
-  const bottom = paint(`╰${repeat('─', width - 2)}╯`, borderStyle);
-  const empty = paint(boxRow('', width), borderStyle);
-  const textRows = wrapText(ENTRY_LINE, contentWidth).map((line) =>
-    boxRow(paint(line, [ANSI.bold, ANSI.white]), width),
-  );
-  const attribution = paint(
-    boxRow(paint('measured in tokens; regret narrowly avoided', [ANSI.dim, ANSI.italic]), width),
-    borderStyle,
-  );
+  const innerWidth = width - 4;
+  const horizontal = '─'.repeat(innerWidth + 2);
+  const emptyLine = renderBoxLine('', innerWidth, (text) => text);
 
-  return ['', top, empty, ...textRows, empty, attribution, empty, bottom, ''].join('\n');
+  return [
+    cyan(`╭${horizontal}╮`),
+    renderBoxLine(centered('HOTFIX EVERYWHERE', innerWidth), innerWidth, (text) => bold(yellow(text))),
+    ...wrapText(TAGLINE, innerWidth).map((line) => renderBoxLine(centered(line, innerWidth), innerWidth, dim)),
+    emptyLine,
+    ...wrapText(ENTRY_LINE, innerWidth).map((line) => renderBoxLine(line, innerWidth, bold)),
+    cyan(`╰${horizontal}╯`),
+    '',
+  ].join('\n');
 }
 
-/** @param {CliOptions} options @param {number} width @returns {string} */
+/**
+ * @param {CliOptions} options
+ * @param {number} width
+ * @returns {string}
+ */
 function renderJson(options, width) {
-  return `${JSON.stringify({
-    line: ENTRY_LINE,
-    characters: ENTRY_LINE.length,
-    mode: options.mode,
-    width,
+  const contentWidth = options.format === 'fancy' ? width - 4 : width;
+  const payload = {
+    schemaVersion: 1,
+    name: PROGRAM_NAME,
     version: VERSION,
-  })}\n`;
+    tagline: TAGLINE,
+    line: ENTRY_LINE,
+    output: {
+      format: options.format,
+      width,
+      contentWidth,
+      wrapped: wrapText(ENTRY_LINE, contentWidth),
+    },
+  };
+  return `${JSON.stringify(payload, null, 2)}\n`;
 }
 
-/** @param {CliOptions} options @returns {string} */
-function render(options) {
-  const width = resolveWidth(options.width);
+/**
+ * @param {CliOptions} options
+ * @param {number} width
+ * @returns {string}
+ */
+function render(options, width) {
   if (options.json) return renderJson(options, width);
-  return options.mode === 'fancy' ? renderFancy(width) : renderPlain(width);
+  if (options.format === 'fancy') return renderFancy(width);
+  return renderPlain(width);
 }
 
-/** @param {string[]} argv @returns {number} process exit status */
-function main(argv) {
-  const parsed = parseArgs(argv);
-
-  if (parsed.error !== null) {
-    process.stderr.write(`${PROGRAM_NAME}: ${parsed.error}\n`);
-    process.stderr.write(`Try '${PROGRAM_NAME} --help' for usage.\n`);
-    return EXIT_USAGE;
-  }
-
-  if (parsed.options === null) {
-    process.stderr.write(`${PROGRAM_NAME}: internal argument parsing failure\n`);
-    return EXIT_USAGE;
-  }
-
-  if (parsed.options.help) {
-    process.stderr.write(`${usageText()}\n`);
-    return 0;
-  }
-
-  if (parsed.options.version) {
-    process.stdout.write(`${VERSION}\n`);
-    return 0;
-  }
-
-  process.stdout.write(render(parsed.options));
-  return 0;
+/**
+ * @param {UsageError} error
+ * @returns {number}
+ */
+function reportUsageError(error) {
+  process.stderr.write(`${PROGRAM_NAME}: ${error.message}\n`);
+  process.stderr.write("Try 'node main.ts --help' for usage.\n");
+  return 2;
 }
 
-const exitStatus = main(process.argv.slice(2));
-if (exitStatus !== 0) process.exitCode = exitStatus;
+/**
+ * @param {string[]} args
+ * @returns {number}
+ */
+function main(args) {
+  try {
+    const options = parseArgs(args);
+    if (options.help) {
+      process.stderr.write(usageText());
+      return 0;
+    }
+    if (options.version) {
+      process.stdout.write(`${VERSION}\n`);
+      return 0;
+    }
+    process.stdout.write(render(options, resolveWidth(options)));
+    return 0;
+  } catch (error) {
+    if (error instanceof UsageError) return reportUsageError(error);
+    throw error;
+  }
+}
+
+process.exitCode = main(process.argv.slice(2));
