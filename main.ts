@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 
 /**
- * hotfix-everywhere — a dependency-free presentation layer for one
- * indestructible deployment truth: production is just somebody else's localhost.
+ * the-cache-was-me — a dependency-free presentation layer for one
+ * immutable debugging confession: the cache was always the culprit.
  */
 
-const PROGRAM_NAME = 'hotfix-everywhere';
+const PROGRAM_NAME = 'the-cache-was-me';
 const VERSION = '1.0.0';
 const ENTRY_LINE =
-  '3am hotfix: it works on my machine, and since my machine is the server now, technically it works everywhere.';
-const TAGLINE = 'production confidence, locally sourced';
+  'fix: it was the cache. it was always the cache. the cache was me.';
+const TAGLINE = 'cache invalidation, personally';
 const DEFAULT_WIDTH = 76;
 const MIN_WIDTH = 32;
 const MAX_WIDTH = 120;
@@ -240,7 +240,7 @@ function renderFancy(width) {
 
   return [
     cyan(`╭${horizontal}╮`),
-    renderBoxLine(centered('HOTFIX EVERYWHERE', innerWidth), innerWidth, (text) => bold(yellow(text))),
+    renderBoxLine(centered('THE CACHE WAS ME', innerWidth), innerWidth, (text) => bold(yellow(text))),
     ...wrapText(TAGLINE, innerWidth).map((line) => renderBoxLine(centered(line, innerWidth), innerWidth, dim)),
     emptyLine,
     ...wrapText(ENTRY_LINE, innerWidth).map((line) => renderBoxLine(line, innerWidth, bold)),

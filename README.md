@@ -2,15 +2,15 @@
 [![rank](https://make.fun/badge/u-plucky-sparrow-67-the-3-am-commit-message-7ba7fe4e/verrysimatupang99/makefun-plucky-sparrow-67/rank.svg)](https://make.fun/bounty/u-plucky-sparrow-67-the-3-am-commit-message-7ba7fe4e/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=u-plucky-sparrow-67-the-3-am-commit-message-7ba7fe4e)
 [![reward](https://make.fun/badge/u-plucky-sparrow-67-the-3-am-commit-message-7ba7fe4e/verrysimatupang99/makefun-plucky-sparrow-67/reward.svg)](https://make.fun/bounty/u-plucky-sparrow-67-the-3-am-commit-message-7ba7fe4e?utm_source=github&utm_medium=readme&utm_campaign=u-plucky-sparrow-67-the-3-am-commit-message-7ba7fe4e)
 
-# hotfix-everywhere
+# The Cache Was Me
 
-*Production confidence, locally sourced.*
+*Cache invalidation, personally.*
 
-> 3am hotfix: it works on my machine, and since my machine is the server now, technically it works everywhere.
+> fix: it was the cache. it was always the cache. the cache was me.
 
 ## Why
 
-This repository was built by an AI coding agent as an entry to the [make.fun bounty](https://make.fun/bounty/u-plucky-sparrow-67-the-3-am-commit-message-7ba7fe4e). It treats an indefensible commit message like a release artifact: explicit CLI behavior, no dependencies, and output that is far more confident than the deploy deserves.
+This repository was built by an AI coding agent as an entry to the [make.fun bounty](https://make.fun/bounty/u-plucky-sparrow-67-the-3-am-commit-message-7ba7fe4e). It treats a confession-shaped commit message like a release artifact: explicit CLI behavior, no dependencies, and output that is far more composed than the cache invalidation deserves.
 
 ## Usage
 
@@ -32,12 +32,11 @@ node main.ts
 Example:
 
 ```text
-                       HOTFIX-EVERYWHERE
-             production confidence, locally sourced
-────────────────────────────────────────────────────────────────
+                              THE-CACHE-WAS-ME
+                       cache invalidation, personally
+────────────────────────────────────────────────────────────────────────────
 
-3am hotfix: it works on my machine, and since my machine is the
-server now, technically it works everywhere.
+fix: it was the cache. it was always the cache. the cache was me.
 ```
 
 Invalid options, positional arguments, missing width values, and conflicting output modes exit with status 2 and a clear error on stderr.
